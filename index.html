@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>0056 成分股即時追蹤</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background-color: #f9f9f9;}
+        h1 { color: #333; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #0056b3; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>0056 成分股與權重清單</h1>
+        <p>最後更新時間：<span id="update-time">載入資料中...</span></p>
+        <table>
+            <thead>
+                <tr>
+                    <th>股票代號</th>
+                    <th>股票名稱</th>
+                    <th>權重 (%)</th>
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                </tbody>
+        </table>
+    </div>
+
+    <script>
+        // 讀取由 GitHub Actions 產生的靜態 JSON 檔案
+        fetch('data/0056.json')
+            .then(response => {
+                if (!response.ok) throw new Error('尚未產生 JSON 資料檔');
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('update-time').innerText = data.last_updated;
+                const tbody = document.getElementById('table-body');
+                
+                // 元大 API 的欄位名稱：stkCd(代號), stkNm(名稱), weights(權重)
+                data.components.forEach(stock => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${stock.stkCd || '-'}</td>
+                        <td>${stock.stkNm || '-'}</td>
+                        <td>${stock.weights ? stock.weights + ' %' : '-'}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                document.getElementById('update-time').innerText = '載入失敗，可能正在進行首次抓取。';
+            });
+    </script>
+</body>
+</html>
