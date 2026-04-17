@@ -5,37 +5,33 @@ from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
 
 def fetch_0056_data():
-    url = "https://www.yuantaetfs.com/api/StkWeights?fundid=1066"
+    # 1. 這是正常人會去看的網頁 (用來騙過防火牆並取得 Cookie)
+    main_url = "https://www.yuantaetfs.com/product/detail/0056/ratio"
     
-    # 啟動 Playwright
     with sync_playwright() as p:
-        # 開啟隱形的 Chromium 瀏覽器
         browser = p.chromium.launch(headless=True)
-        # 偽裝成一般的 Windows Chrome
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
         page = context.new_page()
 
         try:
-            print("啟動隱形瀏覽器 (Playwright) 嘗試破解 WAF JS 挑戰...")
+            print("啟動 Playwright 進入元大 0056 介紹頁...")
+            # 進入主網頁，等待網路安靜下來
+            response = page.goto(main_url, wait_until="networkidle", timeout=30000)
+            print(f"進入主網頁 HTTP 狀態碼: {response.status}")
             
-            # 指揮瀏覽器前往網址，並等待網路安靜下來 (確保 JS 挑戰執行完並重新載入)
-            response = page.goto(url, wait_until="networkidle", timeout=20000)
-            print(f"最終 HTTP 狀態碼: {response.status}")
+            print("WAF 驗證通過！正在從瀏覽器內部發射 API 請求...")
+            # 2. 特洛伊木馬：在已經合法的瀏覽器環境中，打出 API 請求！
+            # Playwright 會自動把這段 JS 執行的 JSON 結果傳回給 Python
+            api_data = page.evaluate("""() => {
+                return fetch('https://www.yuantaetfs.com/api/StkWeights?fundid=1066')
+                    .then(res => res.json());
+            }""")
             
-            # 直接抓取瀏覽器畫面上顯示的文字內容
-            content = page.inner_text("body")
-            print(f"伺服器回傳內容前 100 字: {content[:100]}")
+            print(f"成功取得 JSON 資料！共抓到 {len(api_data)} 檔成分股。")
             
-            # 嘗試將文字解析為 JSON
-            try:
-                data = json.loads(content)
-            except json.JSONDecodeError:
-                print("解析失敗！伺服器畫面上的文字不是有效的 JSON。WAF 可能啟動了更嚴格的圖形驗證碼。")
-                sys.exit(1)
-            
-            # --- 以下儲存邏輯不變 ---
+            # --- 以下儲存邏輯完全不變 ---
             os.makedirs('data', exist_ok=True)
             tz = timezone(timedelta(hours=8))
             tw_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
@@ -44,13 +40,13 @@ def fetch_0056_data():
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump({
                     "last_updated": tw_time,
-                    "components": data
+                    "components": api_data # 存入抓到的 JSON
                 }, f, ensure_ascii=False, indent=4)
                 
             print(f"資料成功更新並寫入 {output_file}")
             
         except Exception as e:
-            print(f"瀏覽器操作發生錯誤: {e}")
+            print(f"抓取發生錯誤: {e}")
             sys.exit(1)
         finally:
             browser.close()
