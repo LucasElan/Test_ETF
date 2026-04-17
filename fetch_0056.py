@@ -14,38 +14,49 @@ def fetch_0056_data():
         )
         page = context.new_page()
 
-        # 準備一個變數來裝攔截到的資料
-        api_data = None
-        
-        # 1. 架設監聽器：當瀏覽器收到任何網路回應時，這個函數就會被觸發
-        def handle_response(response):
-            nonlocal api_data
-            # 如果網址包含 StkWeights，且狀態碼是 200，我們就攔截它的內容！
-            if "StkWeights" in response.url and response.status == 200:
-                try:
-                    data = response.json()
-                    if isinstance(data, list) and len(data) > 0:
-                        print(f"🎯 成功在背景流量中攔截到目標 JSON！")
-                        api_data = data
-                except:
-                    pass
-
-        # 將監聽器綁定到網頁上
-        page.on("response", handle_response)
-
         try:
             print("啟動 Playwright 進入元大 0056 介紹頁...")
-            print("📡 網路監聽器已啟動，正在靜靜等待網頁自己下載資料...")
-            
-            # 2. 進入主網頁，等待所有網路活動靜止
+            # 1. 進入主網頁，等待網路安靜
             page.goto(main_url, wait_until="networkidle", timeout=30000)
             
-            # 稍微等個 3 秒，確保網頁把資料都消化完
+            print("網頁載入完成，正在模擬人類眼睛掃描畫面上的表格...")
+            # 2. 故意等 3 秒，確保前端框架把表格完全畫出來
             page.wait_for_timeout(3000) 
 
-            # 3. 檢查有沒有攔截到東西
-            if api_data:
-                print(f"太棒了！共攔截到 {len(api_data)} 檔成分股資料。")
+            # 3. 視覺暴力破解法：直接從網頁的 HTML 元素中抓字
+            # 我們寫一段 JavaScript 丟進網頁裡執行，讓它幫我們找表格
+            api_data = page.evaluate("""() => {
+                let results = [];
+                // 抓取網頁中所有的表格橫列 (tr)
+                let rows = document.querySelectorAll("tr");
+                
+                rows.forEach(row => {
+                    // 抓取每一列裡面的所有格子 (td)
+                    let cols = row.querySelectorAll("td");
+                    
+                    // 正常的成分股表格至少會有：代號、名稱、權重 這三欄
+                    if(cols.length >= 3) {
+                        let id = cols[0].innerText.trim();
+                        let name = cols[1].innerText.trim();
+                        // 把權重欄位的 % 號去掉，方便之後處理
+                        let weightStr = cols[2].innerText.trim().replace('%', '').trim();
+                        
+                        // 關鍵過濾條件：確定第一欄是股票代號 (數字)，且第三欄是權重 (可轉成數字)
+                        if(/^[0-9]+$/.test(id) && !isNaN(parseFloat(weightStr))) {
+                            results.push({
+                                "stkCd": id,      // 對應你前端 index.html 寫的變數
+                                "stkNm": name,
+                                "weights": weightStr
+                            });
+                        }
+                    }
+                });
+                return results;
+            }""")
+            
+            # 4. 檢查是否有成功刮到資料
+            if api_data and len(api_data) > 0:
+                print(f"太棒了！直接從畫面上成功刮下 {len(api_data)} 檔成分股資料。")
                 
                 os.makedirs('data', exist_ok=True)
                 tz = timezone(timedelta(hours=8))
@@ -60,7 +71,7 @@ def fetch_0056_data():
                     
                 print(f"資料成功更新並寫入 {output_file}")
             else:
-                print("❌ 錯誤：網頁已載入完成，但在背景流量中沒有抓到 API 資料。")
+                print("❌ 錯誤：在網頁畫面上找不到符合格式的表格資料。網站排版可能不符合預期。")
                 sys.exit(1)
                 
         except Exception as e:
