@@ -6,6 +6,10 @@ on:
     - cron: '0 10 * * 1-5'
   workflow_dispatch: # 允許在 GitHub 網頁上手動點擊執行
 
+# 加入這三行，賦予 Actions 寫入 Repo 的權限
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
