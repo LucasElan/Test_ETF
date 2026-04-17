@@ -5,7 +5,6 @@ from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
 
 def fetch_0056_data():
-    # 1. 這是正常人會去看的網頁 (用來騙過防火牆並取得 Cookie)
     main_url = "https://www.yuantaetfs.com/product/detail/0056/ratio"
     
     with sync_playwright() as p:
@@ -15,36 +14,55 @@ def fetch_0056_data():
         )
         page = context.new_page()
 
+        # 準備一個變數來裝攔截到的資料
+        api_data = None
+        
+        # 1. 架設監聽器：當瀏覽器收到任何網路回應時，這個函數就會被觸發
+        def handle_response(response):
+            nonlocal api_data
+            # 如果網址包含 StkWeights，且狀態碼是 200，我們就攔截它的內容！
+            if "StkWeights" in response.url and response.status == 200:
+                try:
+                    data = response.json()
+                    if isinstance(data, list) and len(data) > 0:
+                        print(f"🎯 成功在背景流量中攔截到目標 JSON！")
+                        api_data = data
+                except:
+                    pass
+
+        # 將監聽器綁定到網頁上
+        page.on("response", handle_response)
+
         try:
             print("啟動 Playwright 進入元大 0056 介紹頁...")
-            # 進入主網頁，等待網路安靜下來
-            response = page.goto(main_url, wait_until="networkidle", timeout=30000)
-            print(f"進入主網頁 HTTP 狀態碼: {response.status}")
+            print("📡 網路監聽器已啟動，正在靜靜等待網頁自己下載資料...")
             
-            print("WAF 驗證通過！正在從瀏覽器內部發射 API 請求...")
-            # 2. 特洛伊木馬：在已經合法的瀏覽器環境中，打出 API 請求！
-            # Playwright 會自動把這段 JS 執行的 JSON 結果傳回給 Python
-            api_data = page.evaluate("""() => {
-                return fetch('https://www.yuantaetfs.com/api/StkWeights?fundid=1066')
-                    .then(res => res.json());
-            }""")
+            # 2. 進入主網頁，等待所有網路活動靜止
+            page.goto(main_url, wait_until="networkidle", timeout=30000)
             
-            print(f"成功取得 JSON 資料！共抓到 {len(api_data)} 檔成分股。")
-            
-            # --- 以下儲存邏輯完全不變 ---
-            os.makedirs('data', exist_ok=True)
-            tz = timezone(timedelta(hours=8))
-            tw_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+            # 稍微等個 3 秒，確保網頁把資料都消化完
+            page.wait_for_timeout(3000) 
 
-            output_file = 'data/0056.json'
-            with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "last_updated": tw_time,
-                    "components": api_data # 存入抓到的 JSON
-                }, f, ensure_ascii=False, indent=4)
+            # 3. 檢查有沒有攔截到東西
+            if api_data:
+                print(f"太棒了！共攔截到 {len(api_data)} 檔成分股資料。")
                 
-            print(f"資料成功更新並寫入 {output_file}")
-            
+                os.makedirs('data', exist_ok=True)
+                tz = timezone(timedelta(hours=8))
+                tw_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+
+                output_file = 'data/0056.json'
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        "last_updated": tw_time,
+                        "components": api_data
+                    }, f, ensure_ascii=False, indent=4)
+                    
+                print(f"資料成功更新並寫入 {output_file}")
+            else:
+                print("❌ 錯誤：網頁已載入完成，但在背景流量中沒有抓到 API 資料。")
+                sys.exit(1)
+                
         except Exception as e:
             print(f"抓取發生錯誤: {e}")
             sys.exit(1)
