@@ -24,6 +24,8 @@ jobs:
 
       - name: Install dependencies
         run: pip install requests
+        # 新增 cloudscraper 套件
+        run: pip install requests cloudscraper
 
       - name: Run Python script
         run: python fetch_0056.py
