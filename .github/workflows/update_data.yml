@@ -30,9 +30,15 @@ jobs:
 
       - name: Commit and Push changes
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add data/0056.json
-          # 如果資料沒有變動，commit 會失敗，加上 || exit 0 讓腳本安全略過
-          git commit -m "Auto-update 0056 constituents" || exit 0
-          git push
+          # 先檢查檔案是否存在
+          if [ -f "data/0056.json" ]; then
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git add data/0056.json
+            git commit -m "Auto-update 0056 constituents" || exit 0
+            git push
+            echo "上傳 GitHub 成功！"
+          else
+            echo "錯誤：找不到 data/0056.json 檔案，略過 Commit 步驟。"
+            exit 1
+          fi
